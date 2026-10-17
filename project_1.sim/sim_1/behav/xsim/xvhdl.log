@@ -1,0 +1,4 @@
+INFO: [VRFC 10-163] Analyzing VHDL file "F:/code/airmt/project_1.srcs/sources_1/ip/Adder_8_gen/sim/Adder_8_gen.vhd" into library xil_defaultlib
+INFO: [VRFC 10-3107] analyzing entity 'Adder_8_gen'
+INFO: [VRFC 10-163] Analyzing VHDL file "F:/code/airmt/project_1.srcs/sources_1/ip/Mul_8_gen/sim/Mul_8_gen.vhd" into library xil_defaultlib
+INFO: [VRFC 10-3107] analyzing entity 'Mul_8_gen'

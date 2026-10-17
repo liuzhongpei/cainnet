@@ -1,0 +1,2 @@
+Mul_8_gen.vhd,vhdl,xil_defaultlib,../../../../project_1.srcs/sources_1/ip/Mul_8_gen/sim/Mul_8_gen.vhd,
+glbl.v,Verilog,xil_defaultlib,glbl.v

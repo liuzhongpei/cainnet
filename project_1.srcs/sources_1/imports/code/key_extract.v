@@ -1,0 +1,651 @@
+/****************************************************/
+//	Module name: key_extract.v
+//	Authority @ yangxiangrui (yangxiangrui11@nudt.edu.cn)
+//	Last edited time: 2020/10/01
+//	Function outline: extract 256b+5b key out of PHV
+//  Note: Used only for multi-tenants scenario
+/****************************************************/
+
+`timescale 1ns / 1ps
+module key_extract #(
+    parameter C_S_AXIS_DATA_WIDTH = 512,
+    parameter C_S_AXIS_TUSER_WIDTH = 128,
+    parameter STAGE_ID = 0,
+    parameter PHV_LEN = 64*16+32*12+16*4+5*20+256,
+    parameter KEY_LEN = 64*2+32*2+16*2+5,
+    // format of KEY_OFF entry: |--4(8B)--|--4(8B)--|--4(8B)--|--4(8B)--|--4(4B)--|--4(4B)--|--2(2B)--|--2(2B)--|
+    parameter KEY_OFF = 4*2+4*2+2*2,
+    parameter AXIL_WIDTH = 32,
+    parameter KEY_EX_ID = 1
+    )(
+    input                               clk,
+    input                               rst_n,
+    input [PHV_LEN-1:0]                 phv_in,
+    input                               phv_valid_in,
+
+    output reg [PHV_LEN-1:0]            phv_out,
+    output reg                          phv_valid_out,
+    output reg [KEY_LEN-1:0]            key_out,
+    output reg                          key_valid_out,
+    output reg [KEY_LEN-1:0]            key_mask_out,
+
+    //control path?????¡§?¡¤
+    input [C_S_AXIS_DATA_WIDTH-1:0]			c_s_axis_tdata,
+	input [C_S_AXIS_TUSER_WIDTH-1:0]		c_s_axis_tuser,
+	input [C_S_AXIS_DATA_WIDTH/8-1:0]		c_s_axis_tkeep,
+	input									c_s_axis_tvalid,
+	input									c_s_axis_tlast,
+
+    output reg [C_S_AXIS_DATA_WIDTH-1:0]		c_m_axis_tdata,
+	output reg [C_S_AXIS_TUSER_WIDTH-1:0]		c_m_axis_tuser,
+	output reg [C_S_AXIS_DATA_WIDTH/8-1:0]		c_m_axis_tkeep,
+	output reg								    c_m_axis_tvalid,
+	output reg								    c_m_axis_tlast
+);
+
+
+/********intermediate variables declared here********/
+integer i;
+
+localparam width_2B = 16;
+localparam width_4B = 32;
+localparam width_8B = 64;
+
+//24 fields to be retrived from the pkt header
+reg [width_2B-1:0]    cont_2B [0:3];
+reg [width_4B-1:0]    cont_4B [0:11];
+reg [width_8B-1:0]    cont_8B [0:15];
+
+reg [PHV_LEN-1:0]     phv_out_delay[0:1];
+reg                   phv_valid_out_delay[0:1];
+
+reg  [19:0]            com_op[0:4];
+reg  [7:0]             com_op_1;
+reg  [7:0]             com_op_2;
+
+//vlan_id extracted from metadata
+wire  [11:0]             vlan_id; 
+
+wire [KEY_OFF-1:0]      key_offset;
+wire [KEY_LEN-1:0]        key_mask_out_w;
+
+/********intermediate variables declared here********/
+
+assign vlan_id = phv_in[140:129];
+
+//locate those containers
+always @(posedge clk) begin
+    if(phv_valid_in == 1)begin
+    cont_8B[15] <= phv_in[PHV_LEN-1             -: width_8B];
+    cont_8B[14] <= phv_in[PHV_LEN-1-   width_8B -: width_8B];
+    cont_8B[13] <= phv_in[PHV_LEN-1- 2*width_8B -: width_8B];
+    cont_8B[12] <= phv_in[PHV_LEN-1- 3*width_8B -: width_8B];
+    cont_8B[11] <= phv_in[PHV_LEN-1- 4*width_8B -: width_8B];
+    cont_8B[10] <= phv_in[PHV_LEN-1- 5*width_8B -: width_8B];
+    cont_8B[9] <= phv_in[PHV_LEN-1- 6*width_8B -: width_8B];
+    cont_8B[8] <= phv_in[PHV_LEN-1- 7*width_8B -: width_8B];
+    cont_8B[7] <= phv_in[PHV_LEN-1- 8*width_8B -: width_8B];
+    cont_8B[6] <= phv_in[PHV_LEN-1- 9*width_8B -: width_8B];
+    cont_8B[5] <= phv_in[PHV_LEN-1-10*width_8B -: width_8B];
+    cont_8B[4] <= phv_in[PHV_LEN-1-11*width_8B -: width_8B];
+    cont_8B[3] <= phv_in[PHV_LEN-1-12*width_8B -: width_8B];
+    cont_8B[2] <= phv_in[PHV_LEN-1-13*width_8B -: width_8B];
+    cont_8B[1] <= phv_in[PHV_LEN-1-14*width_8B -: width_8B];
+    cont_8B[0] <= phv_in[PHV_LEN-1-15*width_8B -: width_8B];
+
+    cont_4B[11] <= phv_in[PHV_LEN-1-16*width_8B           -: width_4B];
+    cont_4B[10] <= phv_in[PHV_LEN-1-16*width_8B-width_4B  -: width_4B];
+    cont_4B[9] <= phv_in[PHV_LEN-1-16*width_8B-2*width_4B -: width_4B];
+    cont_4B[8] <= phv_in[PHV_LEN-1-16*width_8B-3*width_4B -: width_4B];
+    cont_4B[7] <= phv_in[PHV_LEN-1-16*width_8B-4*width_4B -: width_4B];
+    cont_4B[6] <= phv_in[PHV_LEN-1-16*width_8B-5*width_4B -: width_4B];
+    cont_4B[5] <= phv_in[PHV_LEN-1-16*width_8B-6*width_4B -: width_4B];
+    cont_4B[4] <= phv_in[PHV_LEN-1-16*width_8B-7*width_4B -: width_4B];
+    cont_4B[3] <= phv_in[PHV_LEN-1-16*width_8B-8*width_4B -: width_4B];
+    cont_4B[2] <= phv_in[PHV_LEN-1-16*width_8B-9*width_4B -: width_4B];
+    cont_4B[1] <= phv_in[PHV_LEN-1-16*width_8B-10*width_4B -: width_4B];
+    cont_4B[0] <= phv_in[PHV_LEN-1-16*width_8B-11*width_4B -: width_4B];
+
+
+    cont_2B[3] <= phv_in[PHV_LEN-1-16*width_8B-12*width_4B            -: width_2B];
+    cont_2B[2] <= phv_in[PHV_LEN-1-16*width_8B-12*width_4B-  width_2B -: width_2B];
+    cont_2B[1] <= phv_in[PHV_LEN-1-16*width_8B-12*width_4B-2*width_2B -: width_2B];
+    cont_2B[0] <= phv_in[PHV_LEN-1-16*width_8B-12*width_4B-3*width_2B -: width_2B];
+    end
+    else begin
+        cont_8B[15] <= cont_8B[15];
+        cont_8B[14] <= cont_8B[14];
+        cont_8B[13] <= cont_8B[13];
+        cont_8B[12] <= cont_8B[12];
+        cont_8B[11] <= cont_8B[11];
+        cont_8B[10] <= cont_8B[10];
+        cont_8B[9] <= cont_8B[9];
+        cont_8B[8] <= cont_8B[8];
+        cont_8B[7] <= cont_8B[7];
+        cont_8B[6] <= cont_8B[6];
+        cont_8B[5] <= cont_8B[5];
+        cont_8B[4] <= cont_8B[4];
+        cont_8B[3] <= cont_8B[3];
+        cont_8B[2] <= cont_8B[2];
+        cont_8B[1] <= cont_8B[1];
+        cont_8B[0] <= cont_8B[0];
+    
+        cont_4B[11] <= cont_4B[11];
+        cont_4B[10] <= cont_4B[10];
+        cont_4B[9] <= cont_4B[9];
+        cont_4B[8] <= cont_4B[8];
+        cont_4B[7] <= cont_4B[7];
+        cont_4B[6] <= cont_4B[6];
+        cont_4B[5] <= cont_4B[5];
+        cont_4B[4] <= cont_4B[4];
+        cont_4B[3] <= cont_4B[3];
+        cont_4B[2] <= cont_4B[2];
+        cont_4B[1] <= cont_4B[1];
+        cont_4B[0] <= cont_4B[0];
+    
+    
+        cont_2B[3] <= cont_2B[3];
+        cont_2B[2] <= cont_2B[2];
+        cont_2B[1] <= cont_2B[1];
+        cont_2B[0] <= cont_2B[0];
+    end
+    com_op[0]  <= phv_in[255+100 -: 20];
+    com_op[1]  <= phv_in[255+80  -: 20];
+    com_op[2]  <= phv_in[255+60  -: 20];
+    com_op[3]  <= phv_in[255+40  -: 20];
+    com_op[4]  <= phv_in[255+20  -: 20];
+    key_mask_out <= key_mask_out_w;
+   
+end
+
+
+
+//have to extract comparators within 1 cycle
+always @(*) begin
+    if(com_op[STAGE_ID][17] == 1'b1) begin
+        com_op_1 = com_op[STAGE_ID][16:9];
+    end
+    else begin
+        if(com_op[STAGE_ID][13:9]>=5'b10000)begin
+            com_op_1 = cont_8B[com_op[STAGE_ID][13:9]-16][7:0];
+        end
+        else if(com_op[STAGE_ID][13:9]<5'b10000 && com_op[STAGE_ID][13:9]>=5'b00100)begin
+            com_op_1 = cont_4B[com_op[STAGE_ID][11:9]-4][7:0];
+        end
+        else begin
+            com_op_1 = cont_2B[com_op[STAGE_ID][11:9]][7:0];
+        end
+    end
+    if(com_op[STAGE_ID][8] == 1'b1) begin
+        com_op_2 = com_op[STAGE_ID][7:0];
+    end
+    else begin
+        if(com_op[STAGE_ID][4:0]>=5'b10000)begin
+            com_op_2 = cont_8B[com_op[STAGE_ID][4:0]-16][7:0];
+        end
+        else if(com_op[STAGE_ID][4:0]<5'b10000 && com_op[STAGE_ID][4:0]>=5'b00100)begin
+            com_op_2 = cont_4B[com_op[STAGE_ID][4:0]-4][7:0];
+        end
+        else begin
+            com_op_2 = cont_2B[com_op[STAGE_ID][4:0]][7:0];
+        end
+    end
+
+end
+
+//extract keys from PHV
+always @(posedge clk or negedge rst_n) begin
+    if(~rst_n) begin
+        key_out <= 0;
+        key_valid_out <= 1'b0;
+        phv_out <= 0;
+        phv_valid_out <= 1'b0;
+        phv_out_delay[0] <= 0;
+        phv_out_delay[1] <= 0;
+        phv_valid_out_delay[0] <= 1'b0;
+        phv_valid_out_delay[1] <= 1'b0;
+    end
+    else begin
+        //output PHV
+        phv_out_delay[0] <= phv_in;
+        phv_out_delay[1] <= phv_out_delay[0];
+        phv_out <= phv_out_delay[1];
+        phv_valid_out_delay[0] <= phv_valid_in;
+        phv_valid_out_delay[1] <= phv_valid_out_delay[0];
+        phv_valid_out <= phv_valid_out_delay[1];
+
+        //extract keys according to key_off
+        if(phv_valid_out_delay[1]) begin
+            //optimize for `if`
+            key_valid_out <= 1'b1; 
+
+            key_out[KEY_LEN-1                                     -: width_8B] <= cont_8B[key_offset[KEY_OFF-1     -: 4]];
+            key_out[KEY_LEN-1- 1*width_8B                         -: width_8B] <= cont_8B[key_offset[KEY_OFF-1-1*4 -: 4]];
+            
+            key_out[KEY_LEN-1- 2*width_8B - 2*width_4B            -: width_2B] <= cont_2B[key_offset[KEY_OFF-1-4*4 -: 2]];
+            key_out[KEY_LEN-1- 2*width_8B - 2*width_4B - width_2B -: width_2B] <= cont_2B[key_offset[KEY_OFF-1-4*4-1*2 -: 2]];
+            if(key_offset[KEY_OFF-1-2*4 -: 4]<4'b1100 && key_offset[KEY_OFF-1-3*4 -: 4]<4'b1100)begin
+                key_out[KEY_LEN-1- 2*width_8B                         -: width_4B] <= cont_4B[key_offset[KEY_OFF-1-2*4 -: 4]];
+                key_out[KEY_LEN-1- 2*width_8B - 1*width_4B            -: width_4B] <= cont_4B[key_offset[KEY_OFF-1-3*4 -: 4]];
+            end
+            else begin
+                key_out[KEY_LEN-1- 2*width_8B                         -: width_4B] <= 32'hffffffff;
+                key_out[KEY_LEN-1- 2*width_8B - 1*width_4B            -: width_4B] <= 32'hffffffff;
+            end
+            //deal with comparators
+            case(com_op[STAGE_ID][19:18])
+                2'b00: begin
+                    key_out[4-STAGE_ID] <= (com_op_1>com_op_2)?1'b1:1'b0;
+                end
+                2'b01: begin
+                    key_out[4-STAGE_ID] <= (com_op_1>=com_op_2)?1'b1:1'b0;
+                end
+                2'b10: begin
+                    key_out[4-STAGE_ID] <= (com_op_1==com_op_2)?1'b1:1'b0;
+                end
+                default: begin
+                    key_out[4-STAGE_ID] <= 1'b1;
+                end
+            endcase
+
+        end
+        
+               
+        else begin
+            key_out <= 0;
+            key_valid_out <= 1'b0;
+        end
+    end
+end
+
+
+/****control path for 512b*****/
+wire [7:0]          mod_id; //module ID
+wire [3:0]          resv;
+wire [15:0]         control_flag; //dst udp port num
+reg  [7:0]          c_index; //table index(addr)
+reg                 c_wr_en_off; //enable table write(wena)
+reg                 c_wr_en_mask;
+
+
+reg [2:0]           c_state;
+
+/****for 256b exclusively*****/
+reg [C_S_AXIS_DATA_WIDTH-1:0]       c_m_axis_tdata_r;
+reg [C_S_AXIS_TUSER_WIDTH-1:0]      c_m_axis_tuser_r;
+reg [C_S_AXIS_DATA_WIDTH/8-1:0]     c_m_axis_tkeep_r;
+reg                                 c_m_axis_tvalid_r;
+reg                                 c_m_axis_tlast_r;
+
+localparam IDLE_C = 0,
+           PARSE_C = 1,
+           WRITE_OFF_C = 2,
+           WRITE_MASK_C = 3,
+		   FLUSH_PKT_C = 4;
+
+generate 
+    if(C_S_AXIS_DATA_WIDTH == 512) begin
+        assign mod_id = c_s_axis_tdata[368+:8];
+        //4'b0 for key offset
+        //4'b1 for key mask
+        assign resv = c_s_axis_tdata[380+:4];
+        assign control_flag = c_s_axis_tdata[335:320];
+
+        always @(posedge clk or negedge rst_n) begin
+            if(~rst_n) begin
+                c_wr_en_off <= 1'b0;
+                c_wr_en_mask <= 1'b0;
+                c_index <= 8'b0;
+        
+                c_m_axis_tdata <= 0;
+                c_m_axis_tuser <= 0;
+                c_m_axis_tkeep <= 0;
+                c_m_axis_tvalid <= 0;
+                c_m_axis_tlast <= 0;
+        
+                c_state <= IDLE_C;
+        
+            end
+            else begin
+                case(c_state)
+                    IDLE_C: begin
+                        if(c_s_axis_tvalid && mod_id[7:3] == STAGE_ID && mod_id[2:0] == KEY_EX_ID &&
+                         control_flag == 16'hf2f1)begin
+                            //c_wr_en <= 1'b1;
+                            c_index <= c_s_axis_tdata[384+:8];
+        
+                            c_m_axis_tdata <= 0;
+                            c_m_axis_tuser <= 0;
+                            c_m_axis_tkeep <= 0;
+                            c_m_axis_tvalid <= 0;
+                            c_m_axis_tlast <= 0;
+        
+                            //c_state <= WRITE_C;
+                            if(resv == 4'b0) begin
+                                c_wr_en_off <= 1'b1;
+                                c_state <= WRITE_OFF_C;
+                            end
+                            else begin
+                                c_wr_en_mask <= 1'b1;
+                                c_state <= WRITE_MASK_C;
+                            end
+                        end
+                        else begin
+                            c_wr_en_off <= 1'b0;
+                            c_wr_en_mask <= 1'b0;
+                            c_index <= 8'b0; 
+        
+                            c_m_axis_tdata <= c_s_axis_tdata;
+                            c_m_axis_tuser <= c_s_axis_tuser;
+                            c_m_axis_tkeep <= c_s_axis_tkeep;
+                            c_m_axis_tvalid <= c_s_axis_tvalid;
+                            c_m_axis_tlast <= c_s_axis_tlast;
+        
+                            c_state <= IDLE_C;
+                        end
+                    end
+                    //support full table flush
+                    WRITE_OFF_C: begin
+                        if(c_s_axis_tvalid && c_s_axis_tlast) begin
+                            c_wr_en_off <= 1'b0;
+                            c_index <= 8'b0;
+                            c_state <= IDLE_C;
+                        end
+                        else if(c_s_axis_tvalid) begin
+                            c_wr_en_off <= 1'b1;
+                            c_index <= c_index + 8'b1;
+                            c_state <= WRITE_OFF_C;
+                        end
+                    end
+                    WRITE_MASK_C: begin
+                        if(c_s_axis_tvalid && c_s_axis_tlast) begin
+                            c_wr_en_mask <= 1'b0;
+                            c_index <= 8'b0;
+                            c_state <= IDLE_C;
+                        end
+                        else if(c_s_axis_tvalid) begin
+                            c_wr_en_mask <= 1'b1;
+                            c_index <= c_index + 8'b1;
+                            c_state <= WRITE_MASK_C;
+                        end
+                    end
+                    default: begin
+                        c_wr_en_off <= 1'b0;
+                        c_wr_en_mask <= 1'b0;
+                        c_index <= 8'b0; 
+                        c_m_axis_tdata <= c_s_axis_tdata;
+                        c_m_axis_tuser <= c_s_axis_tuser;
+                        c_m_axis_tkeep <= c_s_axis_tkeep;
+                        c_m_axis_tvalid <= c_s_axis_tvalid;
+                        c_m_axis_tlast <= c_s_axis_tlast;
+                        c_state <= IDLE_C;
+                    end
+                endcase
+        
+            end
+        end
+        //ram for key extract
+        //blk_mem_gen_2 act_ram_18w_16d
+        // blk_mem_gen_2 #(
+        // 	.C_INIT_FILE_NAME	("./key_extract.mif"),
+        // 	.C_LOAD_INIT_FILE	(1)
+        // )
+        blk_mem_gen_2
+        key_ram_20w_32d
+        (
+            .addra(c_index[4:0]),
+            .clka(clk),
+            .dina(c_s_axis_tdata[19:0]),
+            .ena(1'b1),
+            .wea(c_wr_en_off),
+
+            //only [3:0] is needed for addressing
+            .addrb(vlan_id[7:3]), // TODO: we may need to change this logic due to big/little endian
+            .clkb(clk),
+            .doutb(key_offset),
+            .enb(1'b1)
+        );
+
+        blk_mem_gen_3
+        mask_ram_229w_32d
+        (
+            .addra(c_index[4:0]),
+            .clka(clk),
+            .dina(c_s_axis_tdata[228:0]),
+            .ena(1'b1),
+            .wea(c_wr_en_mask),
+
+            //only [3:0] is needed for addressing
+            .addrb(vlan_id[7:3]), // TODO: we may need to change this logic due to big/little endian
+            .clkb(clk),
+            .doutb(key_mask_out_w),
+            .enb(1'b1)
+        );
+    end
+    if(C_S_AXIS_DATA_WIDTH == 256) begin
+        assign mod_id = c_s_axis_tdata[112+:8];
+        assign resv = c_s_axis_tdata[124+:4];//4'b0 fo key offset 4'b1 for key mask
+        assign control_flag = c_s_axis_tdata[64+:16];
+        always @(posedge clk or negedge rst_n) begin
+            if(~rst_n) begin
+                c_wr_en_off <= 1'b0;
+                c_wr_en_mask <= 1'b0;
+                c_index <= 8'b0;
+
+                c_m_axis_tdata <= 0;
+                c_m_axis_tuser <= 0;
+                c_m_axis_tkeep <= 0;
+                c_m_axis_tvalid <= 0;
+                c_m_axis_tlast <= 0;
+
+                c_m_axis_tdata_r  <= 0;
+                c_m_axis_tuser_r  <= 0;
+                c_m_axis_tkeep_r  <= 0;
+                c_m_axis_tvalid_r <= 0;
+                c_m_axis_tlast_r  <= 0;
+
+                c_state <= IDLE_C;
+
+            end
+
+            else begin
+                case(c_state)
+                    IDLE_C: begin
+                        c_m_axis_tdata <= c_m_axis_tdata_r;
+                        c_m_axis_tuser <= c_m_axis_tuser_r;
+                        c_m_axis_tkeep <= c_m_axis_tkeep_r;
+                        c_m_axis_tvalid <= c_m_axis_tvalid_r;
+                        c_m_axis_tlast <= c_m_axis_tlast_r;
+
+                        if(c_s_axis_tvalid) begin
+
+                            c_m_axis_tdata_r <= c_s_axis_tdata;
+                            c_m_axis_tuser_r <= c_s_axis_tuser;
+                            c_m_axis_tkeep_r <= c_s_axis_tkeep;
+                            c_m_axis_tvalid_r <= c_s_axis_tvalid;
+                            c_m_axis_tlast_r <= c_s_axis_tlast;
+
+                            c_state <= PARSE_C;
+                        end
+                        
+                        else begin
+                            c_wr_en_off <= 1'b0;
+                            c_wr_en_mask <= 1'b0;
+                            c_index <= 8'b0; 
+                            c_m_axis_tvalid_r <= 1'b0;
+                            c_m_axis_tlast_r <= 1'b0;
+
+                            c_state <= IDLE_C;
+                        end
+                    end
+
+                    PARSE_C: begin
+                        if(mod_id[7:3] == STAGE_ID && mod_id[2:0] == KEY_EX_ID && c_s_axis_tvalid && control_flag==16'hf2f1) begin
+                            c_m_axis_tdata <= 0;
+                            c_m_axis_tuser <= 0;
+                            c_m_axis_tkeep <= 0;
+                            c_m_axis_tvalid <= 0;
+                            c_m_axis_tlast <= 0;
+
+                            c_index <= c_s_axis_tdata[128+:8];
+
+                            if(resv == 4'b0) begin
+                                c_wr_en_off <= 1'b1;
+                                c_state <= WRITE_OFF_C;
+                            end
+                            else begin
+                                c_wr_en_mask <= 1'b1;
+                                c_state <= WRITE_MASK_C;
+                            end
+                        end
+                        //if I don't know if I should send it, then I should hold it.
+                        else if(!c_s_axis_tvalid) begin
+                            c_m_axis_tdata <= c_m_axis_tdata;
+                            c_m_axis_tuser <= c_m_axis_tuser;
+                            c_m_axis_tkeep <= c_m_axis_tkeep;
+                            c_m_axis_tvalid <= 0;
+                            c_m_axis_tlast <= 0;
+
+                            c_m_axis_tdata_r <= c_m_axis_tdata_r;
+                            c_m_axis_tuser_r <= c_m_axis_tuser_r;
+                            c_m_axis_tkeep_r <= c_m_axis_tkeep_r;
+                            c_m_axis_tvalid_r <= c_m_axis_tvalid_r;
+                            c_m_axis_tlast_r <= c_m_axis_tlast_r;
+                        end
+
+                        else begin
+                            c_m_axis_tdata <= c_m_axis_tdata_r;
+                            c_m_axis_tuser <= c_m_axis_tuser_r;
+                            c_m_axis_tkeep <= c_m_axis_tkeep_r;
+                            c_m_axis_tvalid <= c_m_axis_tvalid_r;
+                            c_m_axis_tlast <= c_m_axis_tlast_r;
+
+                            c_m_axis_tdata_r <= c_s_axis_tdata;
+                            c_m_axis_tuser_r <= c_s_axis_tuser;
+                            c_m_axis_tkeep_r <= c_s_axis_tkeep;
+                            c_m_axis_tvalid_r <= c_s_axis_tvalid;
+                            c_m_axis_tlast_r <= c_s_axis_tlast;
+                            
+                            if(c_s_axis_tvalid && c_s_axis_tlast) 
+								c_state <= IDLE_C;
+							else
+								c_state <= FLUSH_PKT_C;
+                        end
+
+                    end
+
+                    WRITE_OFF_C: begin
+                        c_m_axis_tvalid_r <= 1'b0;
+                        if(c_s_axis_tvalid && c_s_axis_tlast) begin
+                            c_wr_en_off <= 1'b0;
+                            c_index <= 8'b0;
+                            c_state <= IDLE_C;
+                        end
+                        else if(c_s_axis_tvalid ) begin
+                            c_wr_en_off <= 1'b1;
+                            c_index <= c_index + 8'b1;
+                            c_state <= WRITE_OFF_C;
+                        end
+                        else begin
+                            c_wr_en_off <= 1'b0;
+                            c_index <= 8'b0;
+                            c_state <= IDLE_C;
+                        end
+                    end
+
+                    WRITE_MASK_C: begin
+                        c_m_axis_tvalid_r <= 1'b0;
+                        if(c_s_axis_tvalid && c_s_axis_tlast) begin
+                            c_wr_en_mask <= 1'b0;
+                            c_index <= 8'b0;
+                            c_state <= IDLE_C;
+                        end
+                        else if (c_s_axis_tvalid) begin
+                            c_wr_en_mask <= 1'b1;
+                            c_index <= c_index + 8'b1;
+                            c_state <= WRITE_MASK_C;
+                        end
+                        else begin
+                            c_wr_en_mask <= 1'b0;
+                            c_index <= 8'b0;
+                            c_state <= IDLE_C;
+                        end
+                    end
+
+					FLUSH_PKT_C: begin
+                        c_m_axis_tdata <= c_m_axis_tdata_r;
+                        c_m_axis_tuser <= c_m_axis_tuser_r;
+                        c_m_axis_tkeep <= c_m_axis_tkeep_r;
+                        c_m_axis_tvalid <= c_m_axis_tvalid_r;
+                        c_m_axis_tlast <= c_m_axis_tlast_r;
+
+                        c_m_axis_tdata_r <= c_s_axis_tdata;
+                        c_m_axis_tuser_r <= c_s_axis_tuser;
+                        c_m_axis_tkeep_r <= c_s_axis_tkeep;
+                        c_m_axis_tvalid_r <= c_s_axis_tvalid;
+                        c_m_axis_tlast_r <= c_s_axis_tlast;
+                            
+                        if((c_s_axis_tvalid && c_s_axis_tlast)||(~c_s_axis_tvalid))begin
+							c_state <= IDLE_C;
+						end
+						else begin
+						    c_state <= FLUSH_PKT_C;
+						end
+					end
+					default: begin
+                        c_wr_en_off <= 1'b0;
+                        c_wr_en_mask <= 1'b0;
+                        c_index <= 8'b0; 
+                        c_m_axis_tdata <= c_s_axis_tdata;
+                        c_m_axis_tuser <= c_s_axis_tuser;
+                        c_m_axis_tkeep <= c_s_axis_tkeep;
+                        c_m_axis_tvalid <= c_s_axis_tvalid;
+                        c_m_axis_tlast <= c_s_axis_tlast;
+                        c_state <=IDLE_C;
+                    end
+
+                endcase
+            end
+        end
+        
+        //ram for key extract
+        //blk_mem_gen_2 act_ram_18w_16d
+        // blk_mem_gen_2 #(
+        // 	.C_INIT_FILE_NAME	("./key_extract.mif"),
+        // 	.C_LOAD_INIT_FILE	(1)
+        // )
+        blk_mem_gen_2
+        key_ram_20w_32d
+        (
+            .addra(c_index[4:0]),
+            .clka(clk),
+            .dina(c_s_axis_tdata[19:0]),
+            .ena(1'b1),
+            .wea(c_wr_en_off),
+
+            //only [3:0] is needed for addressing
+            .addrb(vlan_id[7:3]), // TODO: we may need to change this logic due to big/little endian
+            .clkb(clk),
+            .doutb(key_offset),
+            .enb(1'b1)
+        );
+
+        blk_mem_gen_3
+        mask_ram_229w_32d
+        (
+            .addra(c_index[4:0]),
+            .clka(clk),
+            .dina(c_s_axis_tdata[228:0]),
+            .ena(1'b1),
+            .wea(c_wr_en_mask),
+
+            //only [3:0] is needed for addressing
+            .addrb(vlan_id[7:3]), // TODO: we may need to change this logic due to big/little endian
+            .clkb(clk),
+            .doutb(key_mask_out_w),
+            .enb(1'b1)
+        );
+    end
+endgenerate
+
+endmodule

@@ -1,0 +1,26 @@
+# compile vhdl design source files
+vhdl cam  \
+"../../../../../ALU/ALU.srcs/sources_1/imports/Xilinx/ip/xilinx_cam/cam_init_file_pack_xst.vhd" \
+"../../../../../ALU/ALU.srcs/sources_1/imports/Xilinx/ip/xilinx_cam/cam_pkg.vhd" \
+"../../../../../ALU/ALU.srcs/sources_1/imports/Xilinx/ip/xilinx_cam/cam_control.vhd" \
+"../../../../../ALU/ALU.srcs/sources_1/imports/Xilinx/ip/xilinx_cam/cam_decoder.vhd" \
+"../../../../../ALU/ALU.srcs/sources_1/imports/Xilinx/ip/xilinx_cam/cam_input_ternary_ternenc.vhd" \
+"../../../../../ALU/ALU.srcs/sources_1/imports/Xilinx/ip/xilinx_cam/cam_input_ternary.vhd" \
+"../../../../../ALU/ALU.srcs/sources_1/imports/Xilinx/ip/xilinx_cam/cam_input.vhd" \
+"../../../../../ALU/ALU.srcs/sources_1/imports/Xilinx/ip/xilinx_cam/cam_match_enc.vhd" \
+"../../../../../ALU/ALU.srcs/sources_1/imports/Xilinx/ip/xilinx_cam/cam_mem_srl16_wrcomp.vhd" \
+"../../../../../ALU/ALU.srcs/sources_1/imports/Xilinx/ip/xilinx_cam/cam_mem_srl16_ternwrcomp.vhd" \
+"../../../../../ALU/ALU.srcs/sources_1/imports/Xilinx/ip/xilinx_cam/cam_mem_srl16_block_word.vhd" \
+"../../../../../ALU/ALU.srcs/sources_1/imports/Xilinx/ip/xilinx_cam/cam_mem_srl16_block.vhd" \
+"../../../../../ALU/ALU.srcs/sources_1/imports/Xilinx/ip/xilinx_cam/cam_mem_srl16.vhd" \
+"../../../../../ALU/ALU.srcs/sources_1/imports/Xilinx/ip/xilinx_cam/dmem.vhd" \
+"../../../../../ALU/ALU.srcs/sources_1/imports/Xilinx/ip/xilinx_cam/cam_mem_blk_extdepth_prim.vhd" \
+"../../../../../ALU/ALU.srcs/sources_1/imports/Xilinx/ip/xilinx_cam/cam_mem_blk_extdepth.vhd" \
+"../../../../../ALU/ALU.srcs/sources_1/imports/Xilinx/ip/xilinx_cam/cam_mem_blk.vhd" \
+"../../../../../ALU/ALU.srcs/sources_1/imports/Xilinx/ip/xilinx_cam/cam_mem.vhd" \
+"../../../../../ALU/ALU.srcs/sources_1/imports/Xilinx/ip/xilinx_cam/cam_regouts.vhd" \
+"../../../../../ALU/ALU.srcs/sources_1/imports/Xilinx/ip/xilinx_cam/cam_rtl.vhd" \
+"../../../../../ALU/ALU.srcs/sources_1/imports/Xilinx/ip/xilinx_cam/cam.vhd" \
+
+# Do not sort compile order
+nosort

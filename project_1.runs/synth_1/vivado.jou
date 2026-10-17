@@ -1,0 +1,12 @@
+#-----------------------------------------------------------
+# Vivado v2020.1 (64-bit)
+# SW Build 2902540 on Wed May 27 19:54:49 MDT 2020
+# IP Build 2902112 on Wed May 27 22:43:36 MDT 2020
+# Start of session at: Wed Jul 19 21:08:33 2023
+# Process ID: 20556
+# Current directory: F:/code/airmt/project_1.runs/synth_1
+# Command line: vivado.exe -log weights_manager.vds -product Vivado -mode batch -messageDb vivado.pb -notrace -source weights_manager.tcl
+# Log file: F:/code/airmt/project_1.runs/synth_1/weights_manager.vds
+# Journal file: F:/code/airmt/project_1.runs/synth_1\vivado.jou
+#-----------------------------------------------------------
+source weights_manager.tcl -notrace

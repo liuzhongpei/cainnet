@@ -1,0 +1,12 @@
+
+{ 
+    crc :  6621926010594946486  , 
+    ccp_crc :  0  , 
+    cmdline : " -wto 324ef2aa6cbf40ad8b1f4eed28570a22 --incr --debug typical --relax --mt 2 -L xbip_utils_v3_0_10 -L c_reg_fd_v12_0_6 -L xbip_dsp48_wrapper_v3_0_4 -L xbip_pipe_v3_0_6 -L xbip_dsp48_addsub_v3_0_6 -L xbip_addsub_v3_0_6 -L c_addsub_v12_0_14 -L xil_defaultlib -L xbip_bram18k_v3_0_6 -L mult_gen_v12_0_16 -L unisims_ver -L unimacro_ver -L secureip -L xpm --snapshot tb_vector_mul_behav xil_defaultlib.tb_vector_mul xil_defaultlib.glbl" , 
+    buildDate : "May 27 2020" , 
+    buildTime : "20:09:33" , 
+    linkCmd : "F:\\vivado\\Vivado\\2020.1\\data\\..\\tps\\mingw\\6.2.0\\win64.o\\nt\\bin\\gcc.exe -Wa,-W  -O -Wl,--stack,104857600 -o \"xsim.dir/tb_vector_mul_behav/xsimk.exe\"   \"xsim.dir/tb_vector_mul_behav/obj/xsim_0.win64.obj\" \"xsim.dir/tb_vector_mul_behav/obj/xsim_1.win64.obj\" -L\"F:\\vivado\\Vivado\\2020.1\\lib\\win64.o\" -lrdi_simulator_kernel   -lrdi_simbridge_kernel" , 
+    aggregate_nets : 
+    [ 
+    ] 
+} 

@@ -1,0 +1,7 @@
+# compile verilog/system verilog design source files
+
+# compile glbl module
+verilog cam "glbl.v"
+
+# Do not sort compile order
+nosort

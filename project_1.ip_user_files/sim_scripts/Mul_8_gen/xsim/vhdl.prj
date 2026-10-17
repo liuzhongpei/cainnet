@@ -1,0 +1,4 @@
+vhdl xil_defaultlib  \
+"../../../../project_1.srcs/sources_1/ip/Mul_8_gen/sim/Mul_8_gen.vhd" \
+
+nosort

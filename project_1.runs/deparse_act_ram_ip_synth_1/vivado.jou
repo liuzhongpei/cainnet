@@ -1,0 +1,12 @@
+#-----------------------------------------------------------
+# Vivado v2020.1 (64-bit)
+# SW Build 2902540 on Wed May 27 19:54:49 MDT 2020
+# IP Build 2902112 on Wed May 27 22:43:36 MDT 2020
+# Start of session at: Sun Jun 25 21:42:38 2023
+# Process ID: 15896
+# Current directory: G:/code/airmt/project_1.runs/deparse_act_ram_ip_synth_1
+# Command line: vivado.exe -log deparse_act_ram_ip.vds -product Vivado -mode batch -messageDb vivado.pb -notrace -source deparse_act_ram_ip.tcl
+# Log file: G:/code/airmt/project_1.runs/deparse_act_ram_ip_synth_1/deparse_act_ram_ip.vds
+# Journal file: G:/code/airmt/project_1.runs/deparse_act_ram_ip_synth_1\vivado.jou
+#-----------------------------------------------------------
+source deparse_act_ram_ip.tcl -notrace

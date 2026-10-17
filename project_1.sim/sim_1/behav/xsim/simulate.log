@@ -1,0 +1,3 @@
+Vivado Simulator 2020.1
+Time resolution is 1 ps
+$stop called at time : 130 ns : File "F:/code/airmt/project_1.srcs/sim_1/imports/code/tb_vector_mul.v" Line 39
